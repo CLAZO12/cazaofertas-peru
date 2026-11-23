@@ -41,9 +41,9 @@ ML_CLIENT_SECRET = os.getenv("ML_CLIENT_SECRET", "")
 INTERVAL_MINUTES = int(os.getenv("CAZA_MINUTOS", "10"))  # no bajes de 5 o te pueden bloquear
 
 # --- Reglas de detección (0.40 = 40% de descuento) ---
-MIN_DISCOUNT = 0.40            # bajada vs. mediana del historial
-MIN_DISCOUNT_VS_LIST = 0.60    # sin historial: bajada vs. precio de lista (más estricto, la lista puede estar inflada)
-ERROR_DISCOUNT = 0.70          # a partir de aquí se marca como POSIBLE ERROR DE PRECIO
+MIN_DISCOUNT = 0.50            # bajada vs. su precio habitual (mediana del historial)
+MIN_DISCOUNT_VS_LIST = 0.70    # sin historial: bajada vs. precio de lista (más estricto, la lista puede estar inflada)
+ERROR_DISCOUNT = 0.75          # a partir de aquí se marca como POSIBLE ERROR DE PRECIO
 MIN_HISTORY = 3                # observaciones mínimas para usar el historial
 HISTORY_DAYS = 30
 MIN_PRICE = 1.0                # ignora solo precios menores a S/ 1 (S/ 0 = dato vacío)
@@ -76,8 +76,12 @@ CATEGORIES = {
         "min_price": 25,
     },
     "Juguetes": {
-        "terms": ["juguetes", "lego", "hot wheels", "barbie"],
+        "terms": ["juguetes", "lego", "hot wheels", "barbie", "peluche", "juego de mesa"],
         "min_price": 20,
+    },
+    "Marcas": {
+        "terms": ["adidas", "nike", "puma", "bata", "calimod"],
+        "min_price": 40,
     },
 }
 
@@ -95,7 +99,23 @@ STORES = [
     {"name": "Hiraoka",   "type": "hiraoka",   "base": "https://hiraoka.com.pe",        "enabled": True},
     {"name": "Plaza Vea", "type": "vtex",      "base": "https://www.plazavea.com.pe",   "enabled": True},
     {"name": "Promart",   "type": "vtex",      "base": "https://www.promart.pe",        "enabled": True},
+    # Tiendas de marca y operadoras: solo buscan en las categorías que venden
+    {"name": "Nike",  "type": "sfcc", "base": "https://www.nike.com.pe", "enabled": True,
+     "categories": ["Zapatillas", "Ropa", "Marcas"]},
+    {"name": "Bata",  "type": "bata", "base": "https://www.bata.com",    "enabled": True,
+     "categories": ["Zapatillas", "Marcas"]},
+    {"name": "Puma",  "type": "puma", "base": "https://pe.puma.com",     "enabled": True,
+     "categories": ["Zapatillas", "Ropa", "Marcas"]},
+    {"name": "Claro", "type": "vtex", "base": "https://tienda.claro.com.pe", "enabled": True,
+     "categories": ["Celulares"]},
+    {"name": "Metro",   "type": "vtex",    "base": "https://www.metro.pe",       "enabled": True},
+    {"name": "Wong",    "type": "vtex",    "base": "https://www.wong.pe",        "enabled": True},
+    {"name": "Sodimac", "type": "sodimac", "base": "https://www.sodimac.com.pe", "enabled": True,
+     "categories": ["Artefactos", "Juguetes"]},
 ]
+
+# Tiendas que se revisan al mismo tiempo (cada tienda va a su ritmo, sin saturarla)
+PARALLEL_STORES = int(os.getenv("CAZA_PARALELO", "8"))
 
 # Filtros opcionales por variable de entorno:
 #   CAZA_SOLO_TIENDAS=Ripley        -> revisa solo esas tiendas (lo usa iniciar.bat en tu PC)

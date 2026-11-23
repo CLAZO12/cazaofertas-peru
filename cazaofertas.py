@@ -13,11 +13,13 @@ Elaborado por: HuachOfertas — © 2026 · Hecho en Huacho, Perú
 import argparse
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Optional
 
 import config
 import notifier
+import tarjeta
 from db import DB
 from stores import build_stores, Product
 
@@ -70,10 +72,10 @@ def passes_filters(p: Product, min_price: float) -> bool:
 
 def format_alert(a: Alert) -> str:
     p = a.product
-    title = "🚨 <b>POSIBLE ERROR DE PRECIO</b>" if a.is_error else "🔥 <b>Oferta</b>"
+    title = "🚨 <b>POSIBLE ERROR DE PRECIO</b>" if a.is_error else "🔥 <b>SÚPER OFERTA</b>"
     return (f"{title} <b>-{a.discount:.0%}</b>\n"
+            f"🏬 <b>{notifier.esc(p.store.upper())}</b>" + (f" · {notifier.esc(p.category)}" if p.category else "") + "\n"
             f"<b>{notifier.esc(p.name)}</b>\n"
-            f"🏬 {notifier.esc(p.store)}" + (f" · {notifier.esc(p.category)}" if p.category else "") + "\n"
             f"💰 Ahora: <b>S/ {p.price:,.2f}</b>\n"
             f"📉 Antes: <s>S/ {a.reference:,.2f}</s> <i>({a.basis})</i>\n"
             + (f"💳 <b>{notifier.esc(p.note)}</b>\n" if p.note else "")
@@ -82,32 +84,46 @@ def format_alert(a: Alert) -> str:
             "<i>CazaOfertas Perú · HuachOfertas</i>")
 
 
+def collect(store):
+    """Lee todas las búsquedas de UNA tienda (corre en su propio hilo)."""
+    found = []
+    for category, cat in config.CATEGORIES.items():
+        if getattr(store, "categories", None) and category not in store.categories:
+            continue
+        for term in cat["terms"]:
+            try:
+                for p in store.fetch(term):
+                    if passes_filters(p, cat.get("min_price", 0)):
+                        p.category = category
+                        found.append(p)
+            except Exception as e:  # una tienda caída no debe frenar al resto
+                print(f"  {store.name}/{term}: error {e!r}")
+    return store, found
+
+
 def run_once(db: DB, stores):
     pending, seen = [], set()
-    for store in stores:
-        count = 0
-        for category, cat in config.CATEGORIES.items():
-            for term in cat["terms"]:
-                try:
-                    for p in store.fetch(term):
-                        key = (p.store, p.sku)
-                        if key in seen or not passes_filters(p, cat.get("min_price", 0)):
-                            continue
-                        seen.add(key)
-                        count += 1
-                        p.category = category
-                        alert = evaluate(db, p)
-                        db.record_price(p)
-                        if alert and not db.already_alerted(p.store, p.sku, p.price):
-                            pending.append(alert)
-                except Exception as e:  # una tienda caída no debe frenar al resto
-                    print(f"  {store.name}/{term}: error {e!r}")
-        print(f"  {store.name}: {count} productos revisados")
+    workers = max(1, min(config.PARALLEL_STORES, len(stores)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for store, found in pool.map(collect, stores):
+            count = 0
+            for p in found:   # la base de datos se usa solo en el hilo principal
+                key = (p.store, p.sku)
+                if key in seen:
+                    continue
+                seen.add(key)
+                count += 1
+                alert = evaluate(db, p)
+                db.record_price(p)
+                if alert and not db.already_alerted(p.store, p.sku, p.price):
+                    pending.append(alert)
+            print(f"  {store.name}: {count} productos revisados")
 
     # Primero los posibles errores, luego los descuentos más grandes
     pending.sort(key=lambda a: (not a.is_error, -a.discount))
     for a in pending[:config.MAX_ALERTS_PER_RUN]:
-        notifier.send(format_alert(a), a.product.url)
+        png = tarjeta.crear(a.product.store, a.discount, a.is_error)
+        notifier.send_photo(png, format_alert(a), a.product.url)
         db.mark_alerted(a.product.store, a.product.sku, a.product.price)
         time.sleep(0.4)
     if len(pending) > config.MAX_ALERTS_PER_RUN:

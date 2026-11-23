@@ -140,6 +140,7 @@ def _find_products(node):
 
 class FalabellaStore:
     """Falabella Perú: lee el JSON __NEXT_DATA__ embebido en la página de búsqueda."""
+    search_path = "/falabella-pe/search"
 
     def __init__(self, name, base):
         self.name = name
@@ -154,7 +155,7 @@ class FalabellaStore:
             except requests.RequestException:
                 pass
             self._seeded = True
-        return self.session.get(f"{self.base}/falabella-pe/search",
+        return self.session.get(f"{self.base}{self.search_path}",
                                 params={"Ntt": term, "page": page},
                                 headers=HTML_HEADERS, timeout=20)
 
@@ -209,6 +210,11 @@ class FalabellaStore:
         return Product(self.name, str(sku), str(name), price,
                        max(crossed) if crossed else None, url,
                        _price_note(ptype))
+
+
+class SodimacStore(FalabellaStore):
+    """Sodimac Perú: misma plataforma que Falabella."""
+    search_path = "/sodimac-pe/buscar"
 
 
 def debug_falabella(term="televisor"):
@@ -364,6 +370,8 @@ class _HtmlStore:
     def fetch(self, term) -> Iterator[Product]:
         seen = set()
         for page in range(1, config.PAGES_PER_QUERY + 1):
+            if page > 1 and getattr(self, "single_page", False):
+                return
             r = self.session.get(self.page_url(term, page), headers=HTML_HEADERS, timeout=25)
             if r.status_code != 200:
                 print(f"  {self.name}: HTTP {r.status_code} en '{term}'")
@@ -511,8 +519,66 @@ class HiraokaStore(_HtmlStore):
         return out
 
 
+# =============================================================================
+# SALESFORCE COMMERCE CLOUD (Nike Perú, Bata Perú): lee las fichas de la búsqueda
+# =============================================================================
+class SfccStore(_HtmlStore):
+    path = ""          # Bata usa "/pe"
+
+    def page_url(self, term, page):
+        return f"{self.base}{self.path}/search?q={quote(term)}&sz=48&start={(page - 1) * 48}"
+
+    def parse_html(self, html):
+        out = []
+        starts = [m for m in re.finditer(
+            r'<div[^>]+class="[^"]*\bproduct\b[^"]*"[^>]*\bdata-pid="([^"]+)"', html)]
+        for i, m in enumerate(starts):
+            b = html[m.start(): starts[i + 1].start() if i + 1 < len(starts) else m.start() + 40000]
+            link = re.search(r'href="([^"]+\.html[^"]*)"', b)
+            name = (re.search(r'data-cnstrc-item-name="([^"]+)"', b)
+                    or re.search(r'class="[^"]*product-title[^"]*"[^>]*>([^<]+)<', b)
+                    or re.search(r'class="[^"]*tile-product-name[^"]*"[^>]*>([^<]+)<', b))
+            sub = re.search(r'class="[^"]*product-subtitle[^"]*"[^>]*>([^<]+)<', b)
+            price = (re.search(r'class="sales"[^>]*>\s*<span[^>]*content="([\d.]+)"', b)
+                     or re.search(r'js-price-amount[^>]*>\s*S/\s*([\d,.]+)', b)
+                     or re.search(r'data-cnstrc-item-price="([\d.]+)"', b))
+            old = re.search(r'(?:strike-through|original-price-striked)[^>]*>(?:\s*<span[^>]*>)?\s*S/\s*([\d,.]+)', b)
+            if not (link and name and price):
+                continue
+            p = _parse_money(price.group(1))
+            o = _parse_money(old.group(1)) if old else None
+            nombre = unescape(name.group(1)).strip()
+            if sub:
+                nombre = f"{nombre} - {unescape(sub.group(1)).strip()}"
+            if p:
+                out.append(Product(self.name, m.group(1), " ".join(nombre.split()), p,
+                                   o if o and o > p else None,
+                                   urljoin(self.base + "/", link.group(1).replace("&amp;", "&"))))
+        return out
+
+
+class BataStore(SfccStore):
+    path = "/pe"
+
+
+# =============================================================================
+# PUMA Perú: lee el JSON-LD de la búsqueda (solo precio actual; alerta por historial)
+# =============================================================================
+class PumaStore(_HtmlStore):
+    single_page = True
+
+    def page_url(self, term, page):
+        return f"{self.base}/search?q={quote(term)}"
+
+
 def build_stores():
     types = {"vtex": VtexStore, "falabella": FalabellaStore, "mercadolibre": MercadoLibreStore,
-             "ripley": RipleyStore, "hiraoka": HiraokaStore}
-    return [types[s["type"]](s["name"], s["base"])
-            for s in config.STORES if s.get("enabled") and s["type"] in types]
+             "ripley": RipleyStore, "hiraoka": HiraokaStore, "sfcc": SfccStore,
+             "bata": BataStore, "puma": PumaStore, "sodimac": SodimacStore}
+    out = []
+    for s in config.STORES:
+        if s.get("enabled") and s["type"] in types:
+            st = types[s["type"]](s["name"], s["base"])
+            st.categories = s.get("categories")   # None = todas las categorías
+            out.append(st)
+    return out

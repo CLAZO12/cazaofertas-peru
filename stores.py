@@ -45,9 +45,9 @@ class VtexStore:
         url = f"{self.base}/api/catalog_system/pub/products/search"
         for page in range(config.PAGES_PER_QUERY):
             start = page * config.PAGE_SIZE
-            params = {"ft": term, "_from": start,
-                      "_to": start + config.PAGE_SIZE - 1}
-            r = requests.get(url, params=params, headers=HEADERS, timeout=20)
+            # espacios como %20 (con "+" VTEX responde 400 en búsquedas de 2+ palabras)
+            r = requests.get(f"{url}?ft={quote(term)}&_from={start}"
+                             f"&_to={start + config.PAGE_SIZE - 1}", headers=HEADERS, timeout=20)
             # VTEX responde 206 (contenido parcial) cuando todo va bien
             if r.status_code not in (200, 206):
                 print(f"  {self.name}: HTTP {r.status_code} en '{term}'")

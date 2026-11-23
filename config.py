@@ -140,6 +140,11 @@ CHANNELS = [
 if _solo:
     CHANNELS = []
 
+# --- Resumen diario "sigo vivo" (hora de Perú). Pon None para desactivarlo ---
+HEARTBEAT_HOUR = 21
+if _solo:                      # en tu PC (solo Ripley/Bata) no se envía, lo manda GitHub
+    HEARTBEAT_HOUR = None
+
 # --- Fuentes comunitarias (RSS). Agrega aquí los feeds que verifiques. ---
 # Prueba añadiendo /feed a la URL de la web. Ejemplo:
 # FEEDS = [{"name": "Comcupon", "url": "https://comcupon.pe/feed"}]

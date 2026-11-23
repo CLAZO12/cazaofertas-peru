@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS alerts(
     store TEXT, sku TEXT, price REAL, ts INTEGER, PRIMARY KEY(store, sku, price));
 CREATE TABLE IF NOT EXISTS seen_posts(
     link TEXT PRIMARY KEY, feed TEXT, ts INTEGER);
+CREATE TABLE IF NOT EXISTS daily(
+    day TEXT PRIMARY KEY, runs INTEGER DEFAULT 0, products INTEGER DEFAULT 0,
+    stores INTEGER DEFAULT 0, alerts INTEGER DEFAULT 0, posts INTEGER DEFAULT 0,
+    reported INTEGER DEFAULT 0);
 """
 
 REFRESH_SECONDS = 6 * 3600  # guarda una observación aunque no cambie el precio
@@ -64,4 +68,20 @@ class DB:
     def mark_post(self, link, feed):
         self.conn.execute("INSERT OR IGNORE INTO seen_posts VALUES(?,?,?)",
                           (link, feed, int(time.time())))
+        self.conn.commit()
+
+    # --- Resumen diario ("sigo vivo") ---
+    def add_daily(self, day, products, stores, alerts, posts):
+        self.conn.execute("INSERT OR IGNORE INTO daily(day) VALUES(?)", (day,))
+        self.conn.execute(
+            "UPDATE daily SET runs=runs+1, products=?, stores=?, alerts=alerts+?, posts=posts+? WHERE day=?",
+            (products, stores, alerts, posts, day))
+        self.conn.commit()
+
+    def daily(self, day):
+        return self.conn.execute(
+            "SELECT runs, products, stores, alerts, posts, reported FROM daily WHERE day=?", (day,)).fetchone()
+
+    def mark_reported(self, day):
+        self.conn.execute("UPDATE daily SET reported=1 WHERE day=?", (day,))
         self.conn.commit()

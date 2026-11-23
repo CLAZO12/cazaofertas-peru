@@ -14,6 +14,7 @@ import argparse
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from typing import Optional
 
@@ -122,7 +123,9 @@ def run_once(db: DB, stores):
 
     # Primero los posibles errores, luego los descuentos más grandes
     pending.sort(key=lambda a: (not a.is_error, -a.discount))
+    sent = 0
     for a in pending[:config.MAX_ALERTS_PER_RUN]:
+        sent += 1
         png = tarjeta.crear(a.product.store, a.discount, a.is_error)
         notifier.send_photo(png, format_alert(a), a.product.url)
         db.mark_alerted(a.product.store, a.product.sku, a.product.price)
@@ -131,12 +134,38 @@ def run_once(db: DB, stores):
         print(f"  ({len(pending) - config.MAX_ALERTS_PER_RUN} ofertas menores quedaron sin avisar)")
     print(f"  -> {min(len(pending), config.MAX_ALERTS_PER_RUN)} alertas enviadas")
 
-    if config.CHANNELS:
-        canales.revisar(db)
+    posts = canales.revisar(db) if config.CHANNELS else 0
+    heartbeat(db, len(seen), len(stores), sent, posts)
 
     if config.FEEDS:
         from feeds import check_feeds
         check_feeds(db)
+
+
+LIMA = timezone(timedelta(hours=-5))
+
+
+def heartbeat(db: DB, products, n_stores, sent, posts):
+    """Suma las estadísticas del día y, a partir de HEARTBEAT_HOUR, manda el resumen una vez."""
+    now = datetime.now(LIMA)
+    day = now.strftime("%Y-%m-%d")
+    db.add_daily(day, products, n_stores, sent, posts)
+    if config.HEARTBEAT_HOUR is None or now.hour < config.HEARTBEAT_HOUR:
+        return
+    runs, prods, stores, alerts, nposts, reported = db.daily(day)
+    if reported:
+        return
+    canal = ""
+    if config.CHANNELS:
+        canal = f"📢 Posts nuevos de canales: <b>{nposts}</b>\n"
+    texto = (f"✅ <b>CazaOfertas activo</b> · {now.strftime('%d/%m')}\n"
+             f"Hoy hice <b>{runs}</b> revisiones de <b>{prods:,}</b> productos en {stores} tiendas.\n"
+             f"🔥 Súper ofertas enviadas: <b>{alerts}</b>\n"
+             + canal +
+             "Sigo vigilando cada 5 minutos 👀\n"
+             "<i>CazaOfertas Perú · HuachOfertas</i>")
+    if notifier.send(texto):
+        db.mark_reported(day)
 
 
 def diagnostico(term):

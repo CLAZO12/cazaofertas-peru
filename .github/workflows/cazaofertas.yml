@@ -1,14 +1,14 @@
-# CazaOfertas Perú en GitHub: revisa las tiendas cada 30 minutos sin usar tu laptop
+# CazaOfertas Perú en GitHub: revisa las tiendas cada 5 minutos sin usar tu laptop
 name: CazaOfertas
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:        # botón "Run workflow" para probar a mano
 concurrency: cazaofertas
 jobs:
   revisar:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 9
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,6 +27,8 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           CAZA_PAGINAS: "1"
+          CAZA_PAUSA: "0.3,0.8"
+          CAZA_SIN_TIENDAS: "Ripley"   # Ripley bloquea a GitHub; se revisa desde tu PC
         run: python cazaofertas.py --once
       - name: Guardar historial de precios
         if: always()

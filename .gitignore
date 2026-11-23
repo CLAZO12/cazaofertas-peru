@@ -1,0 +1,7 @@
+# No subir nunca a GitHub
+datos_telegram.txt
+.env
+cazaofertas.db
+ofertas.db
+respaldo_original/
+__pycache__/

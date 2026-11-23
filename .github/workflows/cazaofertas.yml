@@ -1,0 +1,36 @@
+# CazaOfertas Perú en GitHub: revisa las tiendas cada 30 minutos sin usar tu laptop
+name: CazaOfertas
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:        # botón "Run workflow" para probar a mano
+concurrency: cazaofertas
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Recuperar historial de precios
+        uses: actions/cache/restore@v4
+        with:
+          path: cazaofertas.db
+          key: precios-${{ github.run_id }}
+          restore-keys: precios-
+      - name: Revisar tiendas
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CAZA_PAGINAS: "1"
+        run: python cazaofertas.py --once
+      - name: Guardar historial de precios
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: cazaofertas.db
+          key: precios-${{ github.run_id }}

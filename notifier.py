@@ -46,3 +46,35 @@ def send_photo(png, caption, buy_url=None):
     except requests.RequestException as e:
         print("Error enviando foto a Telegram:", e)
     return send(caption, buy_url)
+
+
+def send_rich(text, buttons, photo_url=None):
+    """Mensaje HTML con varios botones [{text,url}] y foto opcional (por URL)."""
+    if not config.TELEGRAM_TOKEN or not config.TELEGRAM_CHAT_ID:
+        print("[sin Telegram configurado]\n" + text + "\n" + " | ".join(b["url"] for b in buttons) + "\n")
+        return False
+    markup = {"inline_keyboard": [[b] for b in buttons]} if buttons else None
+    base = f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}"
+    if photo_url:
+        data = {"chat_id": config.TELEGRAM_CHAT_ID, "photo": photo_url,
+                "caption": text[:1024], "parse_mode": "HTML"}
+        if markup:
+            data["reply_markup"] = markup
+        try:
+            r = requests.post(f"{base}/sendPhoto", json=data, timeout=20)
+            if r.ok:
+                return True
+            print("Error Telegram (foto canal):", r.status_code, r.text[:200])
+        except requests.RequestException as e:
+            print("Error enviando foto de canal:", e)
+    data = {"chat_id": config.TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+    if markup:
+        data["reply_markup"] = markup
+    try:
+        r = requests.post(f"{base}/sendMessage", json=data, timeout=15)
+        if not r.ok:
+            print("Error Telegram:", r.status_code, r.text[:200])
+        return r.ok
+    except requests.RequestException as e:
+        print("Error enviando a Telegram:", e)
+        return False

@@ -126,6 +126,20 @@ for _s in STORES:
     if (_solo and _s["name"].lower() not in _solo) or _s["name"].lower() in _sin:
         _s["enabled"] = False
 
+# --- Canales públicos de Telegram que se vigilan ---
+# keywords vacío = te llega TODO lo que publiquen; con palabras = solo lo que las mencione.
+# Para agregar otro canal: copia una línea y cambia "user" por lo que va después de t.me/
+OFERTA_KEYWORDS = ["zapatilla", "ropa", "polo", "casaca", "jean", "buzo", "vestido", "polera",
+                   "juguete", "lego", "muñeca", "peluche", "hot wheels", "barbie",
+                   "error de precio", "súper oferta", "super oferta", "remate", "liquidación"]
+CHANNELS = [
+    {"name": "CONCUPON Perú", "user": "concuponperu", "keywords": []},          # todo
+    # {"name": "Otro canal", "user": "nombre_del_canal", "keywords": OFERTA_KEYWORDS},
+]
+# En tu PC (modo solo Ripley/Bata) no se revisan canales, para que no te lleguen repetidos
+if _solo:
+    CHANNELS = []
+
 # --- Fuentes comunitarias (RSS). Agrega aquí los feeds que verifiques. ---
 # Prueba añadiendo /feed a la URL de la web. Ejemplo:
 # FEEDS = [{"name": "Comcupon", "url": "https://comcupon.pe/feed"}]

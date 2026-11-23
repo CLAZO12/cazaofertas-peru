@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import config
+import canales
 import notifier
 import tarjeta
 from db import DB
@@ -129,6 +130,9 @@ def run_once(db: DB, stores):
     if len(pending) > config.MAX_ALERTS_PER_RUN:
         print(f"  ({len(pending) - config.MAX_ALERTS_PER_RUN} ofertas menores quedaron sin avisar)")
     print(f"  -> {min(len(pending), config.MAX_ALERTS_PER_RUN)} alertas enviadas")
+
+    if config.CHANNELS:
+        canales.revisar(db)
 
     if config.FEEDS:
         from feeds import check_feeds

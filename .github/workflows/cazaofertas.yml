@@ -28,7 +28,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           CAZA_PAGINAS: "1"
           CAZA_PAUSA: "0.3,0.8"
-          CAZA_SIN_TIENDAS: "Ripley"   # Ripley bloquea a GitHub; se revisa desde tu PC
+          CAZA_SIN_TIENDAS: "Ripley,Bata"   # bloquean a GitHub; se revisan desde tu PC
         run: python cazaofertas.py --once
       - name: Guardar historial de precios
         if: always()

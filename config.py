@@ -38,7 +38,7 @@ ML_CLIENT_ID = os.getenv("ML_CLIENT_ID", "")
 ML_CLIENT_SECRET = os.getenv("ML_CLIENT_SECRET", "")
 
 # --- Frecuencia ---
-INTERVAL_MINUTES = 10          # no bajes de 5 o te pueden bloquear
+INTERVAL_MINUTES = int(os.getenv("CAZA_MINUTOS", "10"))  # no bajes de 5 o te pueden bloquear
 
 # --- Reglas de detección (0.40 = 40% de descuento) ---
 MIN_DISCOUNT = 0.40            # bajada vs. mediana del historial
@@ -52,7 +52,7 @@ MAX_ALERTS_PER_RUN = 20        # evita que te lleguen cientos de mensajes en una
 # --- Lectura de tiendas ---
 PAGES_PER_QUERY = int(os.getenv("CAZA_PAGINAS", "2"))  # páginas por búsqueda (en GitHub se usa 1)
 PAGE_SIZE = 50                 # máximo de VTEX y Mercado Libre
-REQUEST_DELAY = (1.0, 2.5)     # pausa aleatoria (segundos) entre peticiones
+REQUEST_DELAY = tuple(float(x) for x in os.getenv("CAZA_PAUSA", "1.0,2.5").split(","))  # pausa aleatoria (s)
 
 DB_PATH = "cazaofertas.db"
 
@@ -96,6 +96,15 @@ STORES = [
     {"name": "Plaza Vea", "type": "vtex",      "base": "https://www.plazavea.com.pe",   "enabled": True},
     {"name": "Promart",   "type": "vtex",      "base": "https://www.promart.pe",        "enabled": True},
 ]
+
+# Filtros opcionales por variable de entorno:
+#   CAZA_SOLO_TIENDAS=Ripley        -> revisa solo esas tiendas (lo usa iniciar.bat en tu PC)
+#   CAZA_SIN_TIENDAS=Ripley         -> revisa todas menos esas (lo usa GitHub)
+_solo = {t.strip().lower() for t in os.getenv("CAZA_SOLO_TIENDAS", "").split(",") if t.strip()}
+_sin = {t.strip().lower() for t in os.getenv("CAZA_SIN_TIENDAS", "").split(",") if t.strip()}
+for _s in STORES:
+    if (_solo and _s["name"].lower() not in _solo) or _s["name"].lower() in _sin:
+        _s["enabled"] = False
 
 # --- Fuentes comunitarias (RSS). Agrega aquí los feeds que verifiques. ---
 # Prueba añadiendo /feed a la URL de la web. Ejemplo:
